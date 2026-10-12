@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live Web</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; height: 100%; background: #fff; font: 13px -apple-system, system-ui, sans-serif; overflow: hidden; }
+  #frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+  #gear { position: absolute; top: 6px; right: 6px; z-index: 5; width: 28px; height: 28px; border-radius: 14px;
+          border: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 15px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+  body:hover #gear, body.empty #gear { opacity: 1; }
+  #panel { position: absolute; inset: 0; z-index: 4; display: none; flex-direction: column; justify-content: center;
+           gap: 10px; padding: 24px; box-sizing: border-box; background: #f5f5f7; color: #1d1d1f; }
+  body.settings #panel, body.empty #panel { display: flex; }
+  #panel h1 { margin: 0 0 4px; font-size: 16px; }
+  label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+  input[type=text], input[type=number] { padding: 8px; font-size: 14px; border: 1px solid #c7c7cc; border-radius: 6px; font-weight: 400; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  button.primary { padding: 8px 16px; border: 0; border-radius: 6px; background: #0a84ff; color: #fff; font-size: 14px; cursor: pointer; }
+  button.secondary { padding: 8px 16px; border: 1px solid #c7c7cc; border-radius: 6px; background: #fff; font-size: 14px; cursor: pointer; }
+  .hint { color: #6e6e73; font-size: 12px; line-height: 1.4; }
+</style>
+</head>
+<body class="empty">
+  <button id="gear" title="Настройки">⚙</button>
+  <iframe id="frame" allow="autoplay; fullscreen; clipboard-write; encrypted-media; picture-in-picture; geolocation; microphone; camera"
+          allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+
+  <div id="panel">
+    <h1>Live Web: адрес страницы</h1>
+    <label>URL
+      <input id="url" type="text" placeholder="https://example.com" autocomplete="off" spellcheck="false">
+    </label>
+    <label>Автообновление, секунд (0 — выкл.)
+      <input id="refresh" type="number" min="0" step="1" value="0">
+    </label>
+    <div class="row">
+      <button class="primary" id="save">Показать</button>
+      <button class="secondary" id="cancel">Отмена</button>
+    </div>
+    <div class="hint">
+      Страница должна быть по https и разрешать встраивание. Сайты с заголовками
+      <code>X-Frame-Options</code> / <code>frame-ancestors</code> (например, google.com, github.com) покажут пустой кадр.
+      Ссылки YouTube и Vimeo преобразуются в embed автоматически.
+    </div>
+  </div>
+
+<script>
+(function () {
+  var frame = document.getElementById('frame');
+  var urlInput = document.getElementById('url');
+  var refreshInput = document.getElementById('refresh');
+  var timer = null;
+  var current = { url: '', refresh: 0 };
+
+  function normalize(raw) {
+    var u = (raw || '').trim();
+    if (!u) return '';
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) u = 'https://' + u;
+    try {
+      var p = new URL(u);
+      var h = p.hostname.replace(/^www\./, '');
+      if (h === 'youtube.com' || h === 'm.youtube.com') {
+        if (p.pathname === '/watch' && p.searchParams.get('v')) {
+          var q = new URLSearchParams(p.search); var id = q.get('v'); q.delete('v');
+          return 'https://www.youtube.com/embed/' + id + (q.toString() ? '?' + q : '');
+        }
+      } else if (h === 'youtu.be') {
+        return 'https://www.youtube.com/embed' + p.pathname + p.search;
+      } else if (h === 'vimeo.com' && /^\/\d+/.test(p.pathname)) {
+        return 'https://player.vimeo.com/video' + p.pathname;
+      }
+    } catch (e) {}
+    return u;
+  }
+
+  function apply() {
+    clearInterval(timer);
+    document.body.classList.toggle('empty', !current.url);
+    if (!current.url) { frame.removeAttribute('src'); return; }
+    frame.src = current.url;
+    if (current.refresh > 0) {
+      timer = setInterval(function () {
+        // перезагрузка без кэш-бастинга: просто повторно присваиваем src
+        frame.src = current.url;
+      }, Math.max(1, current.refresh) * 1000);
+    }
+  }
+
+  function load(settings) {
+    current.url = (settings && settings.get('url')) || '';
+    current.refresh = Number(settings && settings.get('refresh')) || 0;
+    urlInput.value = current.url;
+    refreshInput.value = current.refresh;
+    apply();
+  }
+
+  function save() {
+    current.url = normalize(urlInput.value);
+    current.refresh = Math.max(0, parseInt(refreshInput.value, 10) || 0);
+    urlInput.value = current.url;
+    document.body.classList.remove('settings');
+    apply();
+    try {
+      var s = Office.context.document.settings;
+      s.set('url', current.url);
+      s.set('refresh', current.refresh);
+      s.saveAsync(function () {});
+    } catch (e) {}
+  }
+
+  document.getElementById('gear').onclick = function () { document.body.classList.add('settings'); urlInput.focus(); };
+  document.getElementById('cancel').onclick = function () { document.body.classList.remove('settings'); };
+  document.getElementById('save').onclick = save;
+  urlInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') save(); });
+
+  if (window.Office) {
+    Office.onReady(function () {
+      load(Office.context.document && Office.context.document.settings);
+    });
+  } else {
+    load(null); // запуск в обычном браузере для отладки
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:type="ContentApp">
+  <Id>F5F034E7-2901-4083-A4D7-B1500321DDD8</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>shuvaev</ProviderName>
+  <DefaultLocale>ru-RU</DefaultLocale>
+  <DisplayName DefaultValue="Live Web"/>
+  <Description DefaultValue="Живая веб-страница (iframe) прямо на слайде"/>
+  <IconUrl DefaultValue="https://b152-marketing.github.io/live-web-pptx/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://b152-marketing.github.io/live-web-pptx/icon-64.png"/>
+  <SupportUrl DefaultValue="https://b152-marketing.github.io/live-web-pptx/"/>
+  <Hosts>
+    <Host Name="Presentation"/>
+  </Hosts>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://b152-marketing.github.io/live-web-pptx/index.html"/>
+    <RequestedWidth>640</RequestedWidth>
+    <RequestedHeight>400</RequestedHeight>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+</OfficeApp>

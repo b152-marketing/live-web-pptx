@@ -8,7 +8,8 @@
 <style>
   :root { color-scheme: light dark; }
   html, body { margin: 0; height: 100%; background: #fff; font: 13px -apple-system, system-ui, sans-serif; overflow: hidden; }
-  #frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+  #stage { position: absolute; inset: 0; }
+  #stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
   #gear { position: absolute; top: 6px; right: 6px; z-index: 5; width: 28px; height: 28px; border-radius: 14px;
           border: 0; background: rgba(0,0,0,.55); color: #fff; font-size: 15px; cursor: pointer; opacity: 0; transition: opacity .15s; }
   body:hover #gear, body.empty #gear { opacity: 1; }
@@ -26,8 +27,7 @@
 </head>
 <body class="empty">
   <button id="gear" title="Настройки">⚙</button>
-  <iframe id="frame" allow="autoplay; fullscreen; clipboard-write; encrypted-media; picture-in-picture; geolocation; microphone; camera"
-          allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+  <div id="stage"></div>
 
   <div id="panel">
     <h1>Live Web: адрес страницы</h1>
@@ -50,7 +50,9 @@
 
 <script>
 (function () {
-  var frame = document.getElementById('frame');
+  var stage = document.getElementById('stage');
+  var visible = null;   // iframe, который сейчас виден
+  var pending = null;   // iframe, который грузится под видимым
   var urlInput = document.getElementById('url');
   var refreshInput = document.getElementById('refresh');
   var timer = null;
@@ -77,15 +79,55 @@
     return u;
   }
 
+  var ALLOW = 'autoplay; fullscreen; clipboard-write; encrypted-media; picture-in-picture; geolocation; microphone; camera';
+  var SWAP_DELAY = 300;      // даём странице отрисоваться после load
+  var PENDING_TIMEOUT = 30000;
+
+  function dropPending() {
+    if (pending) { clearTimeout(pending._t); pending.remove(); pending = null; }
+  }
+
+  // Двойная буферизация: новая версия грузится ПОД видимой и подменяет её
+  // только после загрузки. Не загрузилась — остаётся старая, без морганий.
+  function show(url) {
+    dropPending();
+    var f = document.createElement('iframe');
+    f.setAttribute('allow', ALLOW);
+    f.setAttribute('allowfullscreen', '');
+    f.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
+    f.style.zIndex = visible ? '0' : '1';
+    pending = f;
+    f.addEventListener('load', function () {
+      if (pending !== f) return;
+      setTimeout(function () {
+        if (pending !== f) return;
+        clearTimeout(f._t);
+        f.style.zIndex = '2';
+        var old = visible;
+        visible = f; pending = null;
+        if (old) setTimeout(function () { old.remove(); }, 50);
+      }, visible ? SWAP_DELAY : 0);
+    });
+    f._t = setTimeout(function () { if (pending === f) dropPending(); }, PENDING_TIMEOUT);
+    f.src = url;
+    stage.appendChild(f);
+    if (visible) visible.style.zIndex = '1';
+  }
+
+  function clearAll() {
+    dropPending();
+    if (visible) { visible.remove(); visible = null; }
+  }
+
   function apply() {
     clearInterval(timer);
     document.body.classList.toggle('empty', !current.url);
-    if (!current.url) { frame.removeAttribute('src'); return; }
-    frame.src = current.url;
+    clearAll();
+    if (!current.url) return;
+    show(current.url);
     if (current.refresh > 0) {
       timer = setInterval(function () {
-        // перезагрузка без кэш-бастинга: просто повторно присваиваем src
-        frame.src = current.url;
+        if (!pending) show(current.url);   // предыдущая загрузка ещё идёт — пропускаем тик
       }, Math.max(1, current.refresh) * 1000);
     }
   }
